@@ -111,6 +111,29 @@ EOF
         && chmod +x /etc/init.d/elasticsearch
   fi
 
+  # configure cluster topology if ES_CLUSTER_NAME or ES_SEED_HOSTS is set;
+  # surgically replaces only the cluster-topology keys so all other settings
+  # (disk watermarks, xpack, CORS, etc.) are preserved from the image file
+  if [ ! -z "$ES_CLUSTER_NAME" ] || [ ! -z "$ES_SEED_HOSTS" ]; then
+    grep -v -E "^(cluster\.name|node\.name|network\.(host|publish_host)|discovery\.|path\.data|cluster\.initial_master_nodes)" \
+      /etc/elasticsearch/elasticsearch.yml > /tmp/es-cluster.yml
+
+    cat >> /tmp/es-cluster.yml << EOF
+cluster.name: ${ES_CLUSTER_NAME:-elasticsearch}
+node.name: ${ES_NODE_NAME:-elk}
+network.host: 0.0.0.0
+$([ -n "$ES_PUBLISH_HOST" ] && echo "network.publish_host: $ES_PUBLISH_HOST")
+path.data: ${ES_DATA_PATH:-/data/elasticsearch}
+discovery.seed_hosts: [$(echo "$ES_SEED_HOSTS" | tr ',' '\n' | sed 's/.*/"&"/' | paste -sd,)]
+$([ -n "$ES_INITIAL_MASTER_NODES" ] && echo "cluster.initial_master_nodes: [$(echo "$ES_INITIAL_MASTER_NODES" | tr ',' '\n' | sed 's/.*/"&"/' | paste -sd,)]")
+EOF
+    mv /tmp/es-cluster.yml /etc/elasticsearch/elasticsearch.yml
+
+    if [ ! -z "$ES_DATA_PATH" ]; then
+      chown -R elasticsearch:elasticsearch "$ES_DATA_PATH"
+    fi
+  fi
+
   service elasticsearch start
 
   # wait for Elasticsearch to start up before either starting Kibana (if enabled)
@@ -212,6 +235,21 @@ else
   if [ ! -z "$NODE_OPTIONS" ]; then
     awk -v LINE="NODE_OPTIONS=\"$NODE_OPTIONS\"" '{ sub(/^NODE_OPTIONS=.*/, LINE); print; }' /etc/init.d/kibana \
         > /etc/init.d/kibana.new && mv /etc/init.d/kibana.new /etc/init.d/kibana && chmod +x /etc/init.d/kibana
+  fi
+
+  # point Kibana at an external Elasticsearch cluster if KIBANA_ES_HOSTS is set;
+  # comma-separated list of http://host:port values
+  if [ ! -z "$KIBANA_ES_HOSTS" ]; then
+    HOSTS_YAML=$(echo "$KIBANA_ES_HOSTS" | tr ',' '\n' | awk '{print "  - \"" $1 "\""}')
+    grep -v "^elasticsearch\.hosts" /opt/kibana/config/kibana.yml > /opt/kibana/config/kibana.yml.new
+    printf "elasticsearch.hosts:\n%s\n" "$HOSTS_YAML" >> /opt/kibana/config/kibana.yml.new
+    mv /opt/kibana/config/kibana.yml.new /opt/kibana/config/kibana.yml
+  fi
+
+  if [ ! -z "$KIBANA_ENCRYPTION_KEY" ]; then
+    grep -v "^xpack\.encryptedSavedObjects\.encryptionKey" /opt/kibana/config/kibana.yml > /opt/kibana/config/kibana.yml.new
+    echo "xpack.encryptedSavedObjects.encryptionKey: \"$KIBANA_ENCRYPTION_KEY\"" >> /opt/kibana/config/kibana.yml.new
+    mv /opt/kibana/config/kibana.yml.new /opt/kibana/config/kibana.yml
   fi
 
   service kibana start
