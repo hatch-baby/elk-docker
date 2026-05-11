@@ -218,6 +218,12 @@ else
         > /etc/init.d/logstash.new && mv /etc/init.d/logstash.new /etc/init.d/logstash && chmod +x /etc/init.d/logstash
   fi
 
+  # point Logstash at an external Elasticsearch cluster if LS_ES_HOSTS is set;
+  # comma-separated list of host:port values
+  if [ ! -z "$LS_ES_HOSTS" ]; then
+    sed -i "s|hosts => \[.*\]|hosts => [$LS_ES_HOSTS]|" /etc/logstash/conf.d/30-output.conf
+  fi
+
   service logstash start
   OUTPUT_LOGFILES+="/var/log/logstash/logstash-plain.log "
 fi
@@ -235,21 +241,6 @@ else
   if [ ! -z "$NODE_OPTIONS" ]; then
     awk -v LINE="NODE_OPTIONS=\"$NODE_OPTIONS\"" '{ sub(/^NODE_OPTIONS=.*/, LINE); print; }' /etc/init.d/kibana \
         > /etc/init.d/kibana.new && mv /etc/init.d/kibana.new /etc/init.d/kibana && chmod +x /etc/init.d/kibana
-  fi
-
-  # point Kibana at an external Elasticsearch cluster if KIBANA_ES_HOSTS is set;
-  # comma-separated list of http://host:port values
-  if [ ! -z "$KIBANA_ES_HOSTS" ]; then
-    HOSTS_YAML=$(echo "$KIBANA_ES_HOSTS" | tr ',' '\n' | awk '{print "  - \"" $1 "\""}')
-    grep -v "^elasticsearch\.hosts" /opt/kibana/config/kibana.yml > /opt/kibana/config/kibana.yml.new
-    printf "elasticsearch.hosts:\n%s\n" "$HOSTS_YAML" >> /opt/kibana/config/kibana.yml.new
-    mv /opt/kibana/config/kibana.yml.new /opt/kibana/config/kibana.yml
-  fi
-
-  if [ ! -z "$KIBANA_ENCRYPTION_KEY" ]; then
-    grep -v "^xpack\.encryptedSavedObjects\.encryptionKey" /opt/kibana/config/kibana.yml > /opt/kibana/config/kibana.yml.new
-    echo "xpack.encryptedSavedObjects.encryptionKey: \"$KIBANA_ENCRYPTION_KEY\"" >> /opt/kibana/config/kibana.yml.new
-    mv /opt/kibana/config/kibana.yml.new /opt/kibana/config/kibana.yml
   fi
 
   service kibana start
