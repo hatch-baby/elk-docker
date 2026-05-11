@@ -246,6 +246,12 @@ else
     mv /opt/kibana/config/kibana.yml.new /opt/kibana/config/kibana.yml
   fi
 
+  if [ ! -z "$KIBANA_ENCRYPTION_KEY" ]; then
+    grep -v "^xpack\.encryptedSavedObjects\.encryptionKey" /opt/kibana/config/kibana.yml > /opt/kibana/config/kibana.yml.new
+    echo "xpack.encryptedSavedObjects.encryptionKey: \"$KIBANA_ENCRYPTION_KEY\"" >> /opt/kibana/config/kibana.yml.new
+    mv /opt/kibana/config/kibana.yml.new /opt/kibana/config/kibana.yml
+  fi
+
   service kibana start
   OUTPUT_LOGFILES+="/var/log/kibana/kibana5.log "
 fi
