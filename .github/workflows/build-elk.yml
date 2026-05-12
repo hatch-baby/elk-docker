@@ -24,7 +24,7 @@ jobs:
 
       - name: Build and push image
         env:
-          ECR_REPOSITORY: 966878126306.dkr.ecr.us-west-2.amazonaws.com/hatch-baby/elk-docker
+          ECR_REPOSITORY: 966878126306.dkr.ecr.us-west-2.amazonaws.com/elk
           IMAGE_TAG: ${{ github.ref_name }}
         run: |
           docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
