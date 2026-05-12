@@ -1,6 +1,6 @@
 # Elasticsearch, Logstash, Kibana (ELK) Docker image
 
-Forked from (https://github.com/spujadas/elk-docker).
+Maintained by Hatch Baby. Forked from https://github.com/spujadas/elk-docker.
 
 Changes made to this image from the origin:
 - activate the TCP input logstash plugin, so that it works with [The Logstash Logback Appender](https://github.com/logstash/logstash-logback-encoder).
@@ -26,3 +26,92 @@ To specify data without using a file, try (fix the timestamp):
 In order to output logstash activity to /var/log/logstash/logstash.stdout, add this line to /etc/logstash/conf.d/30-output.conf 
 
     stdout { codec => rubydebug }
+
+---
+
+## Cluster / Multi-Node Configuration
+
+### Service-disable flags
+
+Set any of these to `0` to skip starting that service (useful for dedicated nodes):
+
+| Variable | Default | Effect when set to `0` |
+|---|---|---|
+| `ELASTICSEARCH_START` | `1` | Skip Elasticsearch |
+| `LOGSTASH_START` | `1` | Skip Logstash |
+| `KIBANA_START` | `1` | Skip Kibana |
+
+### Elasticsearch cluster env vars
+
+When `ES_CLUSTER_NAME` or `ES_SEED_HOSTS` is set, `start.sh` surgically rewrites only the cluster-topology keys in `elasticsearch.yml`; all other settings from the image are preserved.
+
+| Variable | elasticsearch.yml key | Default |
+|---|---|---|
+| `ES_CLUSTER_NAME` | `cluster.name` | `elasticsearch` |
+| `ES_NODE_NAME` | `node.name` | `elk` |
+| `ES_PUBLISH_HOST` | `network.publish_host` | *(not set)* |
+| `ES_SEED_HOSTS` | `discovery.seed_hosts` | *(not set)* — comma-separated list |
+| `ES_INITIAL_MASTER_NODES` | `cluster.initial_master_nodes` | *(not set)* — bootstrap only, remove after cluster is green |
+| `ES_DATA_PATH` | `path.data` | `/data/elasticsearch` |
+| `ES_HEAP_SIZE` | JVM heap (`-Xmx`/`-Xms`) | *(image default)* |
+
+### Logstash output env vars
+
+`start.sh` patches `30-output.conf` at startup if `LS_ES_HOSTS` is set, replacing the `hosts => [...]` line in-place. When unset, Logstash defaults to `localhost:9200` (single-node / staging behaviour unchanged).
+
+| Variable | Format | Default |
+|---|---|---|
+| `LS_ES_HOSTS` | Logstash DSL: `"host1:9200", "host2:9200"` | `localhost:9200` |
+
+### Kibana env vars
+
+Resolved via Kibana's native `${VAR}` substitution in the baked-in `kibana.yml`.
+
+| Variable | Required | Default | Effect |
+|---|---|---|---|
+| `KIBANA_ES_HOSTS` | No | `["http://localhost:9200"]` | Elasticsearch hosts as an inline YAML array |
+| `KIBANA_ENCRYPTION_KEY` | **Yes** (cluster) | *(none — Kibana will fail to start without it)* | Encryption key for saved objects |
+
+### Resource recommendations
+
+| Role | Instance | `--memory` |
+|---|---|---|
+| Data node (ES only) | r8i.2xlarge (64 GB) | `60g` |
+| Misc host (Logstash + Kibana) | m7i.2xlarge (32 GB) | `28g` |
+
+### Example: data node (Elasticsearch only)
+
+```bash
+docker run -d \
+  --name elk-data \
+  --memory=60g \
+  --ulimit nofile=65536:65536 \
+  -p 9200:9200 -p 9300:9300 \
+  -v /data/elasticsearch:/data/elasticsearch \
+  -e LOGSTASH_START=0 \
+  -e KIBANA_START=0 \
+  -e ES_HEAP_SIZE=31g \
+  -e ES_CLUSTER_NAME=hatch-elk \
+  -e ES_NODE_NAME=elk-data-1 \
+  -e ES_PUBLISH_HOST=elk-data-1.hatch.corp \
+  -e ES_SEED_HOSTS=elk-data-1.hatch.corp,elk-data-2.hatch.corp,elk-data-3.hatch.corp \
+  -e ES_DATA_PATH=/data/elasticsearch \
+  hatch-baby/elk-docker:ELK-9.1.3
+```
+
+### Example: misc host (Logstash + Kibana only)
+
+```bash
+docker run -d \
+  --name elk-misc \
+  --memory=28g \
+  --ulimit nofile=65536:65536 \
+  -p 5000:5000 -p 5000:5000/udp -p 5044:5044 -p 5601:5601 \
+  -e ELASTICSEARCH_START=0 \
+  -e LS_HEAP_SIZE=6g \
+  -e 'LS_ES_HOSTS="elk-data-1.hatch.corp:9200", "elk-data-2.hatch.corp:9200", "elk-data-3.hatch.corp:9200"' \
+  -e ELASTICSEARCH_URL=http://elk-data-1.hatch.corp:9200 \
+  -e 'KIBANA_ES_HOSTS=["http://elk-data-1.hatch.corp:9200", "http://elk-data-2.hatch.corp:9200", "http://elk-data-3.hatch.corp:9200"]' \
+  -e KIBANA_ENCRYPTION_KEY=your-32-char-hex-key \
+  hatch-baby/elk-docker:ELK-9.1.3
+```

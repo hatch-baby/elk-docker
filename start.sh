@@ -111,6 +111,29 @@ EOF
         && chmod +x /etc/init.d/elasticsearch
   fi
 
+  # configure cluster topology if ES_CLUSTER_NAME or ES_SEED_HOSTS is set;
+  # surgically replaces only the cluster-topology keys so all other settings
+  # (disk watermarks, xpack, CORS, etc.) are preserved from the image file
+  if [ ! -z "$ES_CLUSTER_NAME" ] || [ ! -z "$ES_SEED_HOSTS" ]; then
+    grep -v -E "^(cluster\.name|node\.name|network\.(host|publish_host)|discovery\.|path\.data|cluster\.initial_master_nodes)" \
+      /etc/elasticsearch/elasticsearch.yml > /tmp/es-cluster.yml
+
+    cat >> /tmp/es-cluster.yml << EOF
+cluster.name: ${ES_CLUSTER_NAME:-elasticsearch}
+node.name: ${ES_NODE_NAME:-elk}
+network.host: 0.0.0.0
+$([ -n "$ES_PUBLISH_HOST" ] && echo "network.publish_host: $ES_PUBLISH_HOST")
+path.data: ${ES_DATA_PATH:-/data/elasticsearch}
+discovery.seed_hosts: [$(echo "$ES_SEED_HOSTS" | tr ',' '\n' | sed 's/.*/"&"/' | paste -sd,)]
+$([ -n "$ES_INITIAL_MASTER_NODES" ] && echo "cluster.initial_master_nodes: [$(echo "$ES_INITIAL_MASTER_NODES" | tr ',' '\n' | sed 's/.*/"&"/' | paste -sd,)]")
+EOF
+    mv /tmp/es-cluster.yml /etc/elasticsearch/elasticsearch.yml
+
+    if [ ! -z "$ES_DATA_PATH" ]; then
+      chown -R elasticsearch:elasticsearch "$ES_DATA_PATH"
+    fi
+  fi
+
   service elasticsearch start
 
   # wait for Elasticsearch to start up before either starting Kibana (if enabled)
@@ -193,6 +216,12 @@ else
   if [ ! -z "$LS_OPTS" ]; then
     awk -v LINE="LS_OPTS=\"$LS_OPTS\"" '{ sub(/^LS_OPTS=.*/, LINE); print; }' /etc/init.d/logstash \
         > /etc/init.d/logstash.new && mv /etc/init.d/logstash.new /etc/init.d/logstash && chmod +x /etc/init.d/logstash
+  fi
+
+  # point Logstash at an external Elasticsearch cluster if LS_ES_HOSTS is set;
+  # comma-separated list of host:port values
+  if [ ! -z "$LS_ES_HOSTS" ]; then
+    sed -i "s|hosts => \[.*\]|hosts => [$LS_ES_HOSTS]|" /etc/logstash/conf.d/30-output.conf
   fi
 
   service logstash start
