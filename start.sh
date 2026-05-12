@@ -236,6 +236,9 @@ fi
 if [ ! -z "$KIBANA_ES_HOSTS" ]; then
   sed -i "s|elasticsearch.hosts:.*|elasticsearch.hosts: $KIBANA_ES_HOSTS|" /opt/kibana/config/kibana.yml
 fi
+if [ ! -z "$KIBANA_ENCRYPTION_KEY" ]; then
+  sed -i "s|xpack.encryptedSavedObjects.encryptionKey:.*|xpack.encryptedSavedObjects.encryptionKey: \"$KIBANA_ENCRYPTION_KEY\"|" /opt/kibana/config/kibana.yml
+fi
 
 if [ -z "$KIBANA_START" ]; then
   KIBANA_START=1
