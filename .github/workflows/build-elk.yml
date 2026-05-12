@@ -27,5 +27,7 @@ jobs:
           ECR_REPOSITORY: 966878126306.dkr.ecr.us-west-2.amazonaws.com/elk
           IMAGE_TAG: ${{ github.ref_name }}
         run: |
-          docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
+          docker build -t $ECR_REPOSITORY:$IMAGE_TAG \
+            --build-arg GEOLITE_ACCOUNT_ID=${{ secrets.GEOLITE_ACCOUNT_ID }} \
+            --build-arg GEOLITE_LICENSE_KEY=${{ secrets.GEOLITE_LICENSE_KEY }} .
           docker push $ECR_REPOSITORY:$IMAGE_TAG
