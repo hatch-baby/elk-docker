@@ -231,6 +231,12 @@ fi
 
 ### Kibana
 
+# point Kibana at an external Elasticsearch cluster if KIBANA_ES_HOSTS is set;
+# JSON array format: ["host1:9200", "host2:9200"]
+if [ ! -z "$KIBANA_ES_HOSTS" ]; then
+  sed -i "s|elasticsearch.hosts:.*|elasticsearch.hosts: $KIBANA_ES_HOSTS|" /opt/kibana/config/kibana.yml
+fi
+
 if [ -z "$KIBANA_START" ]; then
   KIBANA_START=1
 fi
