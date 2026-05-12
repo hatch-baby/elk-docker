@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - 'elk-*'
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to use (e.g. elk-1.0.0)'
+        required: true
 
 jobs:
   build-and-push:
@@ -25,7 +30,7 @@ jobs:
       - name: Build and push image
         env:
           ECR_REPOSITORY: 966878126306.dkr.ecr.us-west-2.amazonaws.com/elk
-          IMAGE_TAG: ${{ github.ref_name }}
+          IMAGE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || github.ref_name }}
         run: |
           docker build -t $ECR_REPOSITORY:$IMAGE_TAG \
             --build-arg GEOLITE_ACCOUNT_ID=${{ secrets.GEOLITE_ACCOUNT_ID }} \
