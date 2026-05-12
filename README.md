@@ -57,19 +57,20 @@ When `ES_CLUSTER_NAME` or `ES_SEED_HOSTS` is set, `start.sh` surgically rewrites
 
 ### Logstash output env vars
 
-`30-output.conf` uses Logstash's native `${VAR:default}` substitution. Set all three to point Logstash at an external cluster; when unset they default to `localhost:9200` (single-node / staging behaviour unchanged).
+`start.sh` patches `30-output.conf` at startup if `LS_ES_HOSTS` is set, replacing the `hosts => [...]` line in-place. When unset, Logstash defaults to `localhost:9200` (single-node / staging behaviour unchanged).
 
-| Variable | Default |
-|---|---|
-| `LS_ES_HOST_1` | `localhost:9200` |
-| `LS_ES_HOST_2` | `localhost:9200` |
-| `LS_ES_HOST_3` | `localhost:9200` |
+| Variable | Format | Default |
+|---|---|---|
+| `LS_ES_HOSTS` | Logstash DSL: `"host1:9200", "host2:9200"` | `localhost:9200` |
 
 ### Kibana env vars
 
-| Variable | Effect |
-|---|---|
-| `KIBANA_ES_HOSTS` | Comma-separated `http://host:port` list written into `kibana.yml` as `elasticsearch.hosts`. When unset Kibana defaults to `localhost:9200`. |
+Resolved via Kibana's native `${VAR}` substitution in the baked-in `kibana.yml`.
+
+| Variable | Required | Default | Effect |
+|---|---|---|---|
+| `KIBANA_ES_HOSTS` | No | `["http://localhost:9200"]` | Elasticsearch hosts as an inline YAML array |
+| `KIBANA_ENCRYPTION_KEY` | **Yes** (cluster) | *(none — Kibana will fail to start without it)* | Encryption key for saved objects |
 
 ### Resource recommendations
 
@@ -106,12 +107,11 @@ docker run -d \
   --memory=28g \
   --ulimit nofile=65536:65536 \
   -p 5000:5000 -p 5000:5000/udp -p 5044:5044 -p 5601:5601 \
-  -v /opt/kibana/config/kibana.yml:/opt/kibana/config/kibana.yml \
   -e ELASTICSEARCH_START=0 \
   -e LS_HEAP_SIZE=6g \
-  -e LS_ES_HOST_1=elk-data-1.hatch.corp:9200 \
-  -e LS_ES_HOST_2=elk-data-2.hatch.corp:9200 \
-  -e LS_ES_HOST_3=elk-data-3.hatch.corp:9200 \
+  -e 'LS_ES_HOSTS="elk-data-1.hatch.corp:9200", "elk-data-2.hatch.corp:9200", "elk-data-3.hatch.corp:9200"' \
   -e ELASTICSEARCH_URL=http://elk-data-1.hatch.corp:9200 \
+  -e 'KIBANA_ES_HOSTS=["http://elk-data-1.hatch.corp:9200", "http://elk-data-2.hatch.corp:9200", "http://elk-data-3.hatch.corp:9200"]' \
+  -e KIBANA_ENCRYPTION_KEY=your-32-char-hex-key \
   hatch-baby/elk-docker:ELK-9.1.3
 ```
