@@ -43,7 +43,7 @@ server.publicBaseUrl: http://elk.hatch.corp:5601
 # =================== System: Elasticsearch ===================
 # The URLs of the Elasticsearch instances to use for all your queries.
 elasticsearch.hosts: ["http://localhost:9200"]
-xpack.encryptedSavedObjects.encryptionKey: ${KIBANA_ENCRYPTION_KEY}
+xpack.encryptedSavedObjects.encryptionKey: "placeholder-overwritten-at-startup"
 
 # If your Elasticsearch is protected with basic authentication, these settings provide
 # the username and password that the Kibana server uses to perform maintenance on the Kibana
