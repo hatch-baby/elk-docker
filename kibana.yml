@@ -44,6 +44,11 @@ server.publicBaseUrl: http://elk.hatch.corp:5601
 # The URLs of the Elasticsearch instances to use for all your queries.
 elasticsearch.hosts: ["http://localhost:9200"]
 xpack.encryptedSavedObjects.encryptionKey: "placeholder-overwritten-at-startup"
+# Saved objects created before the KIBANA_ENCRYPTION_KEY patch in start.sh worked were
+# encrypted under the placeholder above. Keeping it as a decryption-only key lets them
+# still be read after the real key takes over. Remove once they have been re-encrypted
+# (POST /api/encrypted_saved_objects/_rotate_key).
+xpack.encryptedSavedObjects.keyRotation.decryptionOnlyKeys: ["placeholder-overwritten-at-startup"]
 
 # If your Elasticsearch is protected with basic authentication, these settings provide
 # the username and password that the Kibana server uses to perform maintenance on the Kibana

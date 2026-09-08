@@ -221,7 +221,11 @@ else
   # point Logstash at an external Elasticsearch cluster if LS_ES_HOSTS is set;
   # comma-separated list of host:port values
   if [ ! -z "$LS_ES_HOSTS" ]; then
-    sed -i "s|hosts => \[.*\]|hosts => [$LS_ES_HOSTS]|" /etc/logstash/conf.d/30-output.conf
+    # patched with awk, not sed: a "|" anywhere in the value would terminate a
+    # sed s|...|...| replacement early and be parsed as a substitution flag
+    awk -v LINE="    hosts => [$LS_ES_HOSTS]" '{ sub(/^[[:space:]]*hosts => \[.*\]/, LINE); print; }' \
+        /etc/logstash/conf.d/30-output.conf > /etc/logstash/conf.d/30-output.conf.new \
+      && mv /etc/logstash/conf.d/30-output.conf.new /etc/logstash/conf.d/30-output.conf
   fi
 
   service logstash start
@@ -233,11 +237,17 @@ fi
 
 # point Kibana at an external Elasticsearch cluster if KIBANA_ES_HOSTS is set;
 # JSON array format: ["host1:9200", "host2:9200"]
+# Both are flat, order-independent top-level keys, so we delete the line and
+# append the new one rather than interpolating the value into a sed replacement
+# (a "|" in the value would terminate the s|...|...| expression early).
 if [ ! -z "$KIBANA_ES_HOSTS" ]; then
-  sed -i "s|elasticsearch.hosts:.*|elasticsearch.hosts: $KIBANA_ES_HOSTS|" /opt/kibana/config/kibana.yml
+  sed -i "/^elasticsearch\.hosts:/d" /opt/kibana/config/kibana.yml
+  echo "elasticsearch.hosts: $KIBANA_ES_HOSTS" >> /opt/kibana/config/kibana.yml
 fi
 if [ ! -z "$KIBANA_ENCRYPTION_KEY" ]; then
-  sed -i "s|xpack.encryptedSavedObjects.encryptionKey:.*|xpack.encryptedSavedObjects.encryptionKey: \"$KIBANA_ENCRYPTION_KEY\"|" /opt/kibana/config/kibana.yml
+  sed -i "/^xpack\.encryptedSavedObjects\.encryptionKey:/d" /opt/kibana/config/kibana.yml
+  echo "xpack.encryptedSavedObjects.encryptionKey: \"$KIBANA_ENCRYPTION_KEY\"" \
+    >> /opt/kibana/config/kibana.yml
 fi
 
 if [ -z "$KIBANA_START" ]; then
